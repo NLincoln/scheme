@@ -109,12 +109,16 @@ export function parse_expression(lexer) {
     return list(body);
   } else if (isIdentifierAllowed(char)) {
     return parse_identifier(lexer);
-  } else if (isWhitespace(char)) {
+  } else if (isIdentifierAllowed(char)) {
+    return parse_identifier(lexer);
+  } else {
     return null;
   }
 }
 
 export function parse(str) {
   let lexer = new Lexer(str);
-  return program([parse_expression(lexer)]);
+  return program(
+    collectWhile(lexer, bool, (val, lexer) => parse_expression(lexer))
+  );
 }
