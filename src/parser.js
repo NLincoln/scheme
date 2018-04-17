@@ -52,10 +52,13 @@ function not(func) {
 function collectWhile(lexer, allowed = bool, transform = I) {
   let result = [];
   let next = lexer.peek();
-  while (next && allowed(next, lexer)) {
+  do {
     result.push(transform(next, lexer));
+    if (!allowed(lexer.peek(), lexer)) {
+      break;
+    }
     next = lexer.next();
-  }
+  } while (next && allowed(next, lexer));
   return result.filter(bool);
 }
 
@@ -106,6 +109,7 @@ export function parse_expression(lexer) {
       val => val !== ")",
       (val, lexer) => parse_expression(lexer)
     );
+    lexer.next(); // past the )
     return list(body);
   } else if (isIdentifierAllowed(char)) {
     return parse_identifier(lexer);
