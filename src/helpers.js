@@ -27,3 +27,9 @@ export let decconst = literal => ({
   type: "DECCONST",
   value: literal
 });
+
+export let func = (args, body) => ({
+  type: "FUNCTION",
+  args,
+  body
+});
