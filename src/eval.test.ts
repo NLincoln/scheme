@@ -1,26 +1,27 @@
 import { parse } from "./parser";
 import { evaluate, ContextListNode } from "./eval";
+import { program, identifier } from "./helpers";
 
 describe("ContextListNode", () => {
   test("it is able to do nested lookups", () => {
-    let root = new ContextListNode(new Map([["a", "b"]]));
+    let root = new ContextListNode(new Map([["a", parse("a")]]));
 
-    let child = root.append(new Map([["b", "c"]]));
-    let grandchild = child.append(new Map([["c", "d"]]));
-    expect(grandchild.lookup("b")).toBe("c");
-    expect(grandchild.lookup("a")).toBe("b");
+    let child = root.append(new Map([["b", parse("c")]]));
+    let grandchild = child.append(new Map([["c", parse("d")]]));
+    expect(grandchild.lookup("b")).toEqual(program([identifier("c")]));
+    expect(grandchild.lookup("a")).toEqual(program([identifier("a")]));
 
     expect(grandchild.flattened()).toEqual({
-      a: "b",
-      b: "c",
-      c: "d"
+      a: program([identifier("a")]),
+      b: program([identifier("c")]),
+      c: program([identifier("d")])
     });
   });
 });
 
-const testEval = (code, result) =>
+const testEval = (code: string, result: any) =>
   test(code, () => {
-    expect(evaluate(parse(code))[1]).toEqual(result);
+    expect(evaluate(parse(code)).value).toEqual(result);
   });
 
 testEval(` 1 `, 1);
@@ -81,10 +82,10 @@ describe("defining functions", () => {
   );
 });
 
-let qeval = (code, ctx) => evaluate(parse(code), ctx);
+let qeval = (code: string, ctx: ContextListNode) => evaluate(parse(code), ctx);
 
 test("define", () => {
-  let [context] = evaluate(
+  let { context } = evaluate(
     parse(
       `
       (define a "a")
@@ -94,9 +95,9 @@ test("define", () => {
     `
     )
   );
-  expect(qeval(`a`, context)[1]).toBe("new");
-  expect(qeval(`c`, context)[1]).toBe("a");
-  expect(qeval(`b`, context)[1]).toBe("b");
+  expect(qeval(`a`, context).value).toBe("new");
+  expect(qeval(`c`, context).value).toBe("a");
+  expect(qeval(`b`, context).value).toBe("b");
 });
 
 describe("lambda expressions", () => {

@@ -3,12 +3,12 @@ import {
   program,
   decconst,
   strconst,
-  expression,
   identifier,
-  list
+  list,
+  AstNode
 } from "./helpers";
 
-let testExpression = (title, str, expected) =>
+let testExpression = (title: string, str: string, expected: AstNode) =>
   test(title, () => {
     expect(parse(str)).toEqual(expected);
   });

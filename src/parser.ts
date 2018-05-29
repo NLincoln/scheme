@@ -2,15 +2,18 @@ import {
   program,
   decconst,
   strconst,
-  expression,
   identifier,
-  list
+  list,
+  IdentifierNode,
+  AstNode,
+  DecConstNode,
+  StringConstNode
 } from "./helpers";
 
 // Holds all the state of our recursive-descent parser
 export class Lexer {
-  constructor(str) {
-    this.tokens = str;
+  index: number;
+  constructor(private tokens: string) {
     this.index = 0;
   }
 
@@ -28,7 +31,7 @@ export class Lexer {
  * The I-combinator. Returns it's first arg
  * @param args
  */
-function I(val) {
+function I<T>(val: T): T {
   return val;
 }
 
@@ -37,19 +40,17 @@ function I(val) {
  * @param {any} val
  * @returns {boolean}
  */
-function bool(val) {
+function bool<T>(val: T): boolean {
   return Boolean(val);
 }
 
-/**
- * Returns a function that returns the complement
- * Useful if you're wanting to do something like [].filter(not(isDigit))
- */
-function not(func) {
-  return val => !bool(val);
-}
+type TransformFunction<T> = (s: string, l: Lexer) => T;
 
-function collectWhile(lexer, allowed = bool, transform = I) {
+function collectWhile<T = string>(
+  lexer: Lexer,
+  allowed: (s: string, l: Lexer) => boolean = bool,
+  transform: TransformFunction<T>
+) {
   let result = [];
   let next = lexer.peek();
   do {
@@ -59,44 +60,40 @@ function collectWhile(lexer, allowed = bool, transform = I) {
     }
     next = lexer.next();
   } while (next && allowed(next, lexer));
-  return result.filter(bool);
+  return result;
 }
 
-function isDigit(str) {
+function isDigit(str: string): boolean {
   return /[0-9]/.test(str);
 }
 
-export function parse_string(lexer) {
+export function parse_string(lexer: Lexer): StringConstNode {
   lexer.next(); // Past "
-  return strconst(collectWhile(lexer, val => val !== '"').join(""));
+  return strconst(collectWhile(lexer, val => val !== '"', I).join(""));
 }
 
 /**
  * @param {Lexer} lexer
  */
-export function parse_number(lexer) {
-  return decconst(Number(collectWhile(lexer, isDigit).join("")));
+export function parse_number(lexer: Lexer): DecConstNode {
+  return decconst(Number(collectWhile(lexer, isDigit, I).join("")));
 }
 
-function isWhitespace(char) {
-  return char === " " || char === "\t" || char === "\n";
-}
-
-function isIdentifierAllowed(char) {
+function isIdentifierAllowed(char: string): boolean {
   return /([A-Z]|[a-z]|[0-9]|!|\-)/.test(char);
 }
 
 /**
  * @param {Lexer} lexer
  */
-export function parse_identifier(lexer) {
-  return identifier(collectWhile(lexer, isIdentifierAllowed).join(""));
+export function parse_identifier(lexer: Lexer): IdentifierNode {
+  return identifier(collectWhile(lexer, isIdentifierAllowed, I).join(""));
 }
 
 /**
  * @param {Lexer} lexer
  */
-export function parse_expression(lexer) {
+export function parse_expression(lexer: Lexer): AstNode | null {
   let char = lexer.peek();
   if (isDigit(char)) {
     return parse_number(lexer);
@@ -104,13 +101,13 @@ export function parse_expression(lexer) {
     return parse_string(lexer);
   } else if (char === "(") {
     lexer.next(); // past the (
-    let body = collectWhile(
+    let body = collectWhile<AstNode | null>(
       lexer,
       val => val !== ")",
-      (val, lexer) => parse_expression(lexer)
+      (val: string, lexer: Lexer): AstNode | null => parse_expression(lexer)
     );
     lexer.next(); // past the )
-    return list(body);
+    return list(body.filter(bool) as AstNode[]);
   } else if (isIdentifierAllowed(char)) {
     return parse_identifier(lexer);
   } else if (isIdentifierAllowed(char)) {
@@ -120,9 +117,11 @@ export function parse_expression(lexer) {
   }
 }
 
-export function parse(str) {
+export function parse(str: string) {
   let lexer = new Lexer(str);
-  return program(
-    collectWhile(lexer, bool, (val, lexer) => parse_expression(lexer))
+  let nodes = collectWhile<AstNode | null>(lexer, bool, (val, lexer) =>
+    parse_expression(lexer)
   );
+
+  return program(nodes.filter(bool) as AstNode[]);
 }
