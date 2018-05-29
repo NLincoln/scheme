@@ -60,6 +60,23 @@ describe("statements", () => {
     ])
   );
   testExpression(
+    "bodied program",
+    `
+  (defun add-two (a)
+    (add a 2)
+    (add b 3))
+  `,
+    program([
+      list([
+        identifier("defun"),
+        identifier("add-two"),
+        list([identifier("a")]),
+        list([identifier("add"), identifier("a"), decconst(2)]),
+        list([identifier("add"), identifier("b"), decconst(3)])
+      ])
+    ])
+  );
+  testExpression(
     "a simple program?",
     `
   (defun add-one (a) (add a 1))
@@ -78,6 +95,7 @@ describe("statements", () => {
 });
 
 describe("parsing identifiers", () => {
+  testExpression("id w/ symbols", "!debug!", program([identifier("!debug!")]));
   testExpression("simple id", "a", program([identifier("a")]));
   testExpression("multiple characters", "aaa", program([identifier("aaa")]));
   testExpression(

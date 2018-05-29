@@ -83,7 +83,7 @@ function isWhitespace(char) {
 }
 
 function isIdentifierAllowed(char) {
-  return /([A-Z]|[a-z]|[0-9]|\-)/.test(char);
+  return /([A-Z]|[a-z]|[0-9]|!|\-)/.test(char);
 }
 
 /**

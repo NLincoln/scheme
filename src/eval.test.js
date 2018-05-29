@@ -9,12 +9,18 @@ describe("ContextListNode", () => {
     let grandchild = child.append(new Map([["c", "d"]]));
     expect(grandchild.lookup("b")).toBe("c");
     expect(grandchild.lookup("a")).toBe("b");
+
+    expect(grandchild.flattened()).toEqual({
+      a: "b",
+      b: "c",
+      c: "d"
+    });
   });
 });
 
 const testEval = (code, result) =>
   test(code, () => {
-    expect(evaluate(parse(code))).toEqual(result);
+    expect(evaluate(parse(code))[1]).toEqual(result);
   });
 
 testEval(` 1 `, 1);
@@ -61,5 +67,46 @@ describe("defining functions", () => {
   (add-two 2)
   `,
     4
+  );
+  testEval(
+    `
+    (defun dumb-add (a b)
+      (define a-other (add a 3))
+      (define b-other (add b 5))
+      (add a-other b-other)
+    )
+    (dumb-add 4 10)
+    `,
+    22
+  );
+});
+
+let qeval = (code, ctx) => evaluate(parse(code), ctx);
+
+test("define", () => {
+  let [context] = evaluate(
+    parse(
+      `
+      (define a "a")
+      (define b "b")
+      (define c a)
+      (define a "new")
+    `
+    )
+  );
+  expect(qeval(`a`, context)[1]).toBe("new");
+  expect(qeval(`c`, context)[1]).toBe("a");
+  expect(qeval(`b`, context)[1]).toBe("b");
+});
+
+describe("lambda expressions", () => {
+  testEval(
+    `
+  (define add-proxy (lambda (a b)
+    (add a b)))
+  (define a 5)
+  (add-proxy a a)
+  `,
+    10
   );
 });
