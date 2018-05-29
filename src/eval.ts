@@ -17,27 +17,35 @@ export let func = (args: ListNode, body: BaseAstNode[]): FunctionNode => ({
   body
 });
 
-interface ContextReturn<T = any> {
+interface ContextReturn<T> {
   context: ContextListNode;
-  value?: T;
+  value: T;
 }
 
 interface BuiltinNode {
   type: "BUILTIN";
-  value: (ast: ListNode, context: ContextListNode) => ContextReturn;
+  value: (ast: ListNode, context: ContextListNode) => ContextReturn<any>;
 }
 
-type AstNode = BaseAstNode | BuiltinNode | FunctionNode;
-
+type CallableNode = BuiltinNode | FunctionNode;
+type AstNode = BaseAstNode | CallableNode;
+type EvaluateResult = string | number | IdentifierNode | CallableNode | null;
+type ContextListNodeValue = AstNode | string | number | null;
 export class ContextListNode {
   constructor(
-    private values: Map<string, AstNode>,
+    private values: Map<string, ContextListNodeValue>,
     private next: ContextListNode | null = null
   ) {}
-  append(values: Map<string, AstNode>) {
-    return new ContextListNode(values, this);
+  static from(
+    hash: { [x: string]: ContextListNodeValue },
+    next?: ContextListNode
+  ) {
+    return new ContextListNode(new Map(Object.entries(hash)), next);
   }
-  lookup(key: string): AstNode {
+  append(values: { [x: string]: ContextListNodeValue }) {
+    return ContextListNode.from(values, this);
+  }
+  lookup(key: string): AstNode | string | number {
     if (this.values.has(key)) {
       return this.values.get(key) as AstNode;
     }
@@ -48,13 +56,13 @@ export class ContextListNode {
   }
   flattened() {
     if (this.next === null) {
-      let entries: { [x: string]: AstNode } = {};
+      let entries: { [x: string]: ContextListNodeValue } = {};
       for (let [key, value] of this.values.entries()) {
         entries[key] = value;
       }
       return entries;
     }
-    let entries: { [x: string]: AstNode } = this.next.flattened();
+    let entries: { [x: string]: ContextListNodeValue } = this.next.flattened();
     for (let [key, value] of this.values.entries()) {
       entries[key] = value;
     }
@@ -62,106 +70,97 @@ export class ContextListNode {
   }
 }
 
-const BASE_CONTEXT: ContextListNode = new ContextListNode(
-  new Map<string, BuiltinNode>(
-    Object.entries<BuiltinNode>({
-      "!log!": {
-        type: "BUILTIN",
-        value: (ast, context) => {
-          console.log(evaluate(ast, context));
-          return {
-            context
-          };
-        }
-      },
-      "!debug!": {
-        type: "BUILTIN",
-        value: (ast, context) => {
-          console.log(context.flattened());
-          return { context };
-        }
-      },
-      add: {
-        type: "BUILTIN",
-        value: (ast, context) => {
-          return {
-            context,
-            value: ast.elements.reduce((prev, curr) => {
-              return prev + evaluate(curr, context).value;
-            }, 0)
-          };
-        }
-      },
-      lambda: {
-        type: "BUILTIN",
-        value: (ast, context) => {
-          let [args, ...body] = ast.elements as Array<ListNode>;
-          let f = func(args, body);
-          return { context, value: f };
-        }
-      },
-      define: {
-        type: "BUILTIN",
-        value: (ast, context) => {
-          if (ast.elements[0].type !== "IDENTIFIER") {
-            throw new Error("Argument to define must be an identifier");
-          }
-          let varName = (ast.elements[0] as IdentifierNode).text;
-          let value = evaluate(ast.elements[1], context).value;
-          let newContext = context.append(
-            new Map(
-              Object.entries({
-                [varName]: value
-              })
-            )
-          );
-          return { context: newContext, value };
-        }
-      },
-      defun: {
-        type: "BUILTIN",
-        value: (ast, context) => {
-          let [funcName, args, ...body] = ast.elements;
-
-          if (funcName.type !== "IDENTIFIER") {
-            throw new Error("First argument to defun must be an identifier");
-          }
-
-          if (args.type !== "LIST") {
-            throw new Error("2nd argument to list must be a list");
-          }
-          let f = func(args, body);
-
-          let ctx = context.append(
-            new Map(
-              Object.entries({
-                [(funcName as IdentifierNode).text]: f
-              })
-            )
-          );
-          return { context: ctx, value: f };
-        }
+const BASE_CONTEXT: ContextListNode = ContextListNode.from({
+  "!log!": {
+    type: "BUILTIN",
+    value: (ast, context) => {
+      console.log(evaluate(ast, context));
+      return {
+        context,
+        value: null
+      };
+    }
+  },
+  "!debug!": {
+    type: "BUILTIN",
+    value: (ast, context) => {
+      console.log(context.flattened());
+      return { context, value: null };
+    }
+  },
+  add: {
+    type: "BUILTIN",
+    value: (ast, context) => {
+      return {
+        context,
+        value: ast.elements.reduce((prev, curr) => {
+          return prev + (evaluate(curr, context).value as number);
+        }, 0)
+      };
+    }
+  },
+  lambda: {
+    type: "BUILTIN",
+    value: (ast, context) => {
+      let [args, ...body] = ast.elements as Array<ListNode>;
+      let f = func(args, body);
+      return { context, value: f };
+    }
+  },
+  define: {
+    type: "BUILTIN",
+    value: (ast, context) => {
+      if (ast.elements[0].type !== "IDENTIFIER") {
+        throw new Error("Argument to define must be an identifier");
       }
-    })
-  )
-);
+      let varName = (ast.elements[0] as IdentifierNode).text;
+      let value = evaluate(ast.elements[1], context).value;
+      let newContext = context.append({
+        [varName]: value
+      });
+      return { context: newContext, value };
+    }
+  },
+  defun: {
+    type: "BUILTIN",
+    value: (ast, context) => {
+      let [funcName, args, ...body] = ast.elements;
+
+      if (funcName.type !== "IDENTIFIER") {
+        throw new Error("First argument to defun must be an identifier");
+      }
+
+      if (args.type !== "LIST") {
+        throw new Error("2nd argument to list must be a list");
+      }
+      let f = func(args, body);
+
+      let ctx = context.append({
+        [(funcName as IdentifierNode).text]: f
+      });
+      return { context: ctx, value: f };
+    }
+  }
+});
 
 function evaluateBody(
   elements: BaseAstNode[],
   context: ContextListNode
-): ContextReturn {
-  return elements.reduce(
-    ({ context }, element) => {
-      return evaluate(element, context);
-    },
-    { context }
-  );
+): ContextReturn<EvaluateResult> {
+  let result: ContextReturn<EvaluateResult> = {
+    context,
+    value: null
+  };
+  for (let element of elements) {
+    result = evaluate(element, result.context);
+  }
+  return result;
 }
 
 function listToArray(
   ast: ListNode,
   context: ContextListNode
-): ContextReturn<IdentifierNode[]> {
+): ContextReturn<ContextListNodeValue[]> {
   let results = [];
   for (let element of ast.elements) {
     let result = evaluate(element, context);
@@ -175,10 +174,10 @@ function listToArray(
 }
 
 function funcall(
-  func: AstNode,
+  func: CallableNode,
   args: ListNode,
   context: ContextListNode
-): ContextReturn {
+): ContextReturn<EvaluateResult> {
   switch (func.type) {
     case "BUILTIN":
       return func.value(args, context);
@@ -196,31 +195,31 @@ function funcall(
       argValues.forEach((val, i) => {
         map.set((func.args.elements[i] as IdentifierNode).text, val);
       });
-      newContext = newContext.append(map);
+      newContext = new ContextListNode(map, newContext);
       return {
         context,
         value: evaluateBody(func.body, newContext).value
       };
     }
-    default:
-      throw new Error("Unknown function call type found");
   }
 }
 
 export function evaluate(
   ast: BaseAstNode,
   context = BASE_CONTEXT
-): ContextReturn {
+): ContextReturn<EvaluateResult> {
   switch (ast.type) {
     case "LIST": {
-      let functionName = evaluate(ast.elements[0], context).value;
+      // Perform the lookup. We evaluate in case the head of the list is a lambda expression
+      let functionName = evaluate(ast.elements[0], context)
+        .value as CallableNode;
       let rest = list(ast.elements.slice(1));
       return funcall(functionName, rest, context);
     }
     case "IDENTIFIER":
       return {
         context,
-        value: context.lookup(ast.text)
+        value: context.lookup(ast.text) as string | number
       };
     case "PROGRAM":
       return evaluateBody(ast.expressions, context);

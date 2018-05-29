@@ -37,8 +37,6 @@ function I<T>(val: T): T {
 
 /**
  * Casts it's operand to boolean
- * @param {any} val
- * @returns {boolean}
  */
 function bool<T>(val: T): boolean {
   return Boolean(val);

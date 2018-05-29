@@ -1,23 +1,5 @@
 import { parse } from "./parser";
 import { evaluate, ContextListNode } from "./eval";
-import { program, identifier } from "./helpers";
-
-describe("ContextListNode", () => {
-  test("it is able to do nested lookups", () => {
-    let root = new ContextListNode(new Map([["a", parse("a")]]));
-
-    let child = root.append(new Map([["b", parse("c")]]));
-    let grandchild = child.append(new Map([["c", parse("d")]]));
-    expect(grandchild.lookup("b")).toEqual(program([identifier("c")]));
-    expect(grandchild.lookup("a")).toEqual(program([identifier("a")]));
-
-    expect(grandchild.flattened()).toEqual({
-      a: program([identifier("a")]),
-      b: program([identifier("c")]),
-      c: program([identifier("d")])
-    });
-  });
-});
 
 const testEval = (code: string, result: any) =>
   test(code, () => {
@@ -110,4 +92,11 @@ describe("lambda expressions", () => {
   `,
     10
   );
+  testEval(
+    `
+    ((lambda (a) (add a 1)) 3)
+    `,
+    4
+  );
+  testEval(`((lambda ()))`, null);
 });
